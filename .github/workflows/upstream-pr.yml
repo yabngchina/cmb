@@ -1,0 +1,98 @@
+name: Upstream Sync PR
+
+on:
+  schedule:
+    - cron: '0 */12 * * *'
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+      - name: Add upstream
+        run: |
+          git remote add upstream https://github.com/Stoeaves/cmb.git
+
+      - name: Fetch upstream
+        run: |
+          git fetch upstream
+
+      - name: Check for updates
+        id: check_updates
+        run: |
+          LOCAL=$(git rev-parse HEAD)
+          REMOTE=$(git rev-parse upstream/main)
+
+          echo "Local: $LOCAL"
+          echo "Remote: $REMOTE"
+
+          if [ "$LOCAL" = "$REMOTE" ]; then
+            echo "has_updates=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_updates=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Stop if no updates
+        if: steps.check_updates.outputs.has_updates == 'false'
+        run: |
+          echo "Already up to date."
+          exit 0
+
+      - name: Create sync branch
+        if: steps.check_updates.outputs.has_updates == 'true'
+        run: |
+          git checkout -B upstream-sync
+
+      - name: Merge upstream changes
+        if: steps.check_updates.outputs.has_updates == 'true'
+        run: |
+          git merge upstream/main --no-edit || true
+
+      - name: Push sync branch
+        if: steps.check_updates.outputs.has_updates == 'true'
+        run: |
+          git push origin upstream-sync --force
+
+      - name: Check existing PR
+        if: steps.check_updates.outputs.has_updates == 'true'
+        id: check_pr
+        run: |
+          COUNT=$(gh pr list \
+            --head upstream-sync \
+            --base main \
+            --state open \
+            --json number \
+            --jq length)
+
+          echo "Open PR count: $COUNT"
+
+          echo "count=$COUNT" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Pull Request
+        if: steps.check_pr.outputs.count == '0'
+        run: |
+          gh pr create \
+            --title "Sync upstream updates" \
+            --body "This PR was automatically created to sync the latest upstream updates." \
+            --base main \
+            --head upstream-sync
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

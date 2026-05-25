@@ -1,0 +1,22 @@
+{
+  "name": "cloudflare-github-imgbed",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "dev:build": "vite build --watch",
+    "dev:pages": "wrangler pages dev dist",
+    "dev": "npm-run-all -p dev:*",
+    "build": "vite build",
+    "deploy": "wrangler pages deploy dist"
+  },
+  "dependencies": {
+    "vue": "^3.5.25"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.2",
+    "npm-run-all": "^4.1.5",
+    "vite": "^7.3.1",
+    "wrangler": "^4.93.1"
+  }
+}

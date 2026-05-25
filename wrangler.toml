@@ -1,0 +1,4 @@
+name = "cf-github-imgbed"
+compatibility_date = "2026-05-20"
+
+pages_build_output_dir = "./dist"
