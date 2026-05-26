@@ -25,6 +25,10 @@ export async function onRequest(context) {
   }
 
   if (pathname.startsWith('/api')) {
+    console.log("rsa_public_key = " + env.RSA_PUBLIC_KEY)
+    console.log("rsa_private_key = " + env.RSA_PRIVATE_KEY)
+    console.log("pass = " + env.ADMIN_PASSWORD)
+    console.log("token = " + env.GITHUB_TOKEN)
     if (!env.RSA_PUBLIC_KEY || !env.RSA_PRIVATE_KEY || !env.ADMIN_PASSWORD || !env.GITHUB_TOKEN)
       return jsonResponse({ error: 'lackRequiredEnv' }, 500);
 
