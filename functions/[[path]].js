@@ -9,7 +9,7 @@ export async function onRequest(context) {
   if (pathname.startsWith('/api/')) {
     const allowed = await rateLimiter.checkLimit(env, ip, pathname);
     if (!allowed) {
-      return jsonResponse({ error: '请求过于频繁，请稍后再试' }, 429);
+      return jsonResponse({ error: 'rateLimit' }, 429);
     }
   }
 
@@ -26,9 +26,9 @@ export async function onRequest(context) {
 
   if (pathname.startsWith('/api')) {
     if (!env.RSA_PUBLIC_KEY || !env.RSA_PRIVATE_KEY || !env.ADMIN_PASSWORD || !env.GITHUB_TOKEN)
-      return jsonResponse({ error: '未设置必要环境变量' }, 500);
+      return jsonResponse({ error: 'lackRequiredEnv' }, 500);
 
-    if (!env.KV) return jsonResponse({ error: '未设置 KV' }, 500);
+    if (!env.KV) return jsonResponse({ error: 'noKV' }, 500);
 
     let response;
 
@@ -64,7 +64,7 @@ export async function onRequest(context) {
       response = await handleBatchVisibility(request, env);
 
     if (!response) {
-      response = jsonResponse({ error: 'Not Found' }, 404);
+      response = jsonResponse({ error: 'notFound' }, 404);
     }
 
     const newHeaders = new Headers(response.headers);
@@ -84,7 +84,7 @@ async function handleRandom(request, env) {
   // 检查是否允许随机 API
   const allowRandom = await getKVSetting(env, 'allowRandom', false);
   if (!allowRandom) {
-    return jsonResponse({ error: '随机图片接口未启用' }, 403);
+    return jsonResponse({ error: 'randomIsDisable' }, 403);
   }
 
   // 检查请求来源
@@ -105,7 +105,7 @@ async function handleRandom(request, env) {
       });
 
       if (!isAllowed) {
-        return jsonResponse({ error: '该主机名不被允许访问随机图片接口' }, 403);
+        return jsonResponse({ error: 'disallowedHost' }, 403);
       }
     }
   }
@@ -121,7 +121,7 @@ async function handleRandom(request, env) {
   const publicImages = allImages.filter((img) => !!publicMap[img.name]);
 
   if (!publicImages || !Array.isArray(publicImages) || publicImages.length === 0) {
-    return jsonResponse({ error: '暂无公开图片' }, 404);
+    return jsonResponse({ error: 'noPublicImages' }, 404);
   }
 
   // 按仓库过滤
@@ -134,7 +134,7 @@ async function handleRandom(request, env) {
   filteredImages = filteredImages.filter((img) => img.url && img.name);
 
   if (filteredImages.length === 0) {
-    return jsonResponse({ error: '暂无符合条件的公开图片' }, 404);
+    return jsonResponse({ error: 'noMatchingImages' }, 404);
   }
 
   // 随机选一张
@@ -200,7 +200,7 @@ async function handleRandom(request, env) {
       });
 
       if (!imageResponse.ok) {
-        return jsonResponse({ error: '获取图片失败' }, 500);
+        return jsonResponse({ error: 'fetchImageFailed' }, 500);
       }
 
       const contentType = imageResponse.headers.get('Content-Type') || getContentType(image.name);
@@ -211,7 +211,7 @@ async function handleRandom(request, env) {
 
       return new Response(imageResponse.body, { status: 200, headers });
     } catch (error) {
-      return jsonResponse({ error: '获取图片失败' }, 500);
+      return jsonResponse({ error: 'fetchImageFailed' }, 500);
     }
   }
 }
@@ -219,7 +219,7 @@ async function handleRandom(request, env) {
 async function handleImages(request, env) {
   const authResult = await verifyAuth(request, env);
   if (!authResult) {
-    return jsonResponse({ error: '未授权，请重新登录' }, 401);
+    return jsonResponse({ error: 'notAuthorized' }, 401);
   }
 
   const allImages = await getAllImages(env);
@@ -351,14 +351,14 @@ async function getImageListForRepo(repoConfig) {
 async function handleUpload(request, env) {
   const authResult = await verifyAuth(request, env);
   if (!authResult) {
-    return jsonResponse({ error: '未授权，请重新登录' }, 401);
+    return jsonResponse({ error: 'notAuthorized' }, 401);
   }
 
   let formData;
   try {
     formData = await request.formData();
   } catch (e) {
-    return jsonResponse({ error: '表单数据无效' }, 400);
+    return jsonResponse({ error: 'invalidFormData' }, 400);
   }
 
   const file = formData.get('image');
@@ -367,22 +367,22 @@ async function handleUpload(request, env) {
   const repoId = formData.get('repoId') || 'default';
 
   if (!file || !file.name) {
-    return jsonResponse({ error: '未提供图片文件' }, 400);
+    return jsonResponse({ error: 'noUploadedImage' }, 400);
   }
 
   const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
   if (!allowedTypes.includes(file.type)) {
-    return jsonResponse({ error: '不支持的文件类型，仅允许：JPG、PNG、GIF、WebP', code: 'INVALID_FILE_TYPE' }, 400);
+    return jsonResponse({ error: 'invalidFileType' }, 400);
   }
 
   if (file.size > 20 * 1024 * 1024) {
-    return jsonResponse({ error: '文件大小超过限制（最大 20MB）', code: 'FILE_TOO_LARGE' }, 400);
+    return jsonResponse({ error: 'fileTooLarge' }, 400);
   }
 
   // 获取目标仓库配置
   const repo = await getRepositoryById(env, repoId);
   if (!repo.owner || !repo.repo || !repo.token) {
-    return jsonResponse({ error: '仓库配置不完整' }, 500);
+    return jsonResponse({ error: 'incompleteRepoConfig' }, 500);
   }
 
   const ext = (file.name.split('.').pop() || 'png').toLowerCase();
@@ -416,7 +416,7 @@ async function handleUpload(request, env) {
   });
 
   if (!ghResponse.ok) {
-    const err = await ghResponse.json().catch(() => ({ message: 'GitHub 未知错误' }));
+    const err = await ghResponse.json().catch(() => ({ message: 'GitHub unknownError' }));
     throw new Error(err.message || '上传到 GitHub 失败');
   }
 
@@ -449,22 +449,22 @@ async function handleUpload(request, env) {
 async function handleDelete(request, env) {
   const authResult = await verifyAuth(request, env);
   if (!authResult) {
-    return jsonResponse({ error: '未授权，请重新登录' }, 401);
+    return jsonResponse({ error: 'notAuthorized' }, 401);
   }
 
   let body;
   try {
     body = await request.json();
   } catch (e) {
-    return jsonResponse({ error: '请求数据无效' }, 400);
+    return jsonResponse({ error: 'invalidData' }, 400);
   }
 
   const { filename, repoId } = body;
   if (!filename || filename.includes('/') || filename.includes('..')) {
-    return jsonResponse({ error: '文件名无效' }, 400);
+    return jsonResponse({ error: 'invalidFilename' }, 400);
   }
   if (!repoId) {
-    return jsonResponse({ error: '仓库 ID 未提供' }, 400);
+    return jsonResponse({ error: 'notProvidedRepoId' }, 400);
   }
 
   const repo = await getRepositoryById(env, repoId);
@@ -481,12 +481,12 @@ async function handleDelete(request, env) {
   });
 
   if (!getResponse.ok) {
-    return jsonResponse({ error: '文件不存在' }, 404);
+    return jsonResponse({ error: 'fileNotExist' }, 404);
   }
 
   const fileData = await getResponse.json().catch(() => null);
   if (!fileData || !fileData.sha) {
-    return jsonResponse({ error: '获取文件信息失败' }, 500);
+    return jsonResponse({ error: 'getFileInfoFailed' }, 500);
   }
 
   const deleteResponse = await fetch(apiUrl, {
@@ -504,7 +504,7 @@ async function handleDelete(request, env) {
   });
 
   if (!deleteResponse.ok) {
-    const err = await deleteResponse.json().catch(() => ({ message: '未知错误' }));
+    const err = await deleteResponse.json().catch(() => ({ message: 'unknownError' }));
     throw new Error(err.message || '删除失败');
   }
 
@@ -523,28 +523,28 @@ async function handleDelete(request, env) {
 async function handleBatchVisibility(request, env) {
   const authResult = await verifyAuth(request, env);
   if (!authResult) {
-    return jsonResponse({ error: '未授权，请重新登录' }, 401);
+    return jsonResponse({ error: 'notAuthorized' }, 401);
   }
 
   let body;
   try {
     body = await request.json();
   } catch (e) {
-    return jsonResponse({ error: '请求数据无效' }, 400);
+    return jsonResponse({ error: 'invalidData' }, 400);
   }
 
   const { filesList, isPublic } = body;
 
   if (!Array.isArray(filesList) || filesList.length === 0) {
-    return jsonResponse({ error: '请提供文件名列表' }, 400);
+    return jsonResponse({ error: 'emptyFilesList' }, 400);
   }
 
   if (typeof isPublic !== 'boolean') {
-    return jsonResponse({ error: 'isPublic 必须是布尔值' }, 400);
+    return jsonResponse({ error: 'isPublicMustBeBoolean' }, 400);
   }
 
   if (!env.KV) {
-    return jsonResponse({ error: 'KV 未配置' }, 500);
+    return jsonResponse({ error: 'noKV' }, 500);
   }
 
   try {
@@ -583,7 +583,7 @@ async function handleBatchVisibility(request, env) {
     });
   } catch (error) {
     console.error('批量修改可见性失败:', error.message);
-    return jsonResponse({ error: '批量修改失败' }, 500);
+    return jsonResponse({ error: 'batchFailed' }, 500);
   }
 }
 
@@ -622,17 +622,17 @@ async function handleAuth(request, env) {
   try {
     body = await request.json();
   } catch (e) {
-    return jsonResponse({ error: '请求数据无效' }, 400);
+    return jsonResponse({ error: 'invalidData' }, 400);
   }
 
   const { token } = body;
   if (!token) {
-    return jsonResponse({ error: '缺少认证令牌' }, 400);
+    return jsonResponse({ error: 'lackAuthToken' }, 400);
   }
 
   if (!env.RSA_PRIVATE_KEY || !env.ADMIN_PASSWORD) {
     console.error('缺少 RSA_PRIVATE_KEY 或 ADMIN_PASSWORD 配置');
-    return jsonResponse({ error: '服务器配置错误' }, 500);
+    return jsonResponse({ error: 'lackRequiredEnv' }, 500);
   }
 
   try {
@@ -647,9 +647,9 @@ async function handleAuth(request, env) {
         allowRandom: allowRandom === 'true',
       });
     }
-    return jsonResponse({ valid: false, error: '密码错误' }, 401);
+    return jsonResponse({ valid: false, error: 'wrongPassword' }, 401);
   } catch (error) {
-    return jsonResponse({ valid: false, error: '认证失败，请重试' }, 401);
+    return jsonResponse({ valid: false, error: 'authFailed' }, 401);
   }
 }
 
@@ -707,18 +707,18 @@ async function handleGetSettingsUpdateTime(env) {
 async function handleUpdateSettings(request, env) {
   const authResult = await verifyAuth(request, env);
   if (!authResult) {
-    return jsonResponse({ error: '未授权，请重新登录' }, 401);
+    return jsonResponse({ error: 'notAuthorized' }, 401);
   }
 
   let body;
   try {
     body = await request.json();
   } catch (e) {
-    return jsonResponse({ error: '请求数据无效' }, 400);
+    return jsonResponse({ error: 'invalidData' }, 400);
   }
 
   if (!env.KV) {
-    return jsonResponse({ error: 'KV 未配置' }, 500);
+    return jsonResponse({ error: 'noKV' }, 500);
   }
 
   try {
@@ -731,10 +731,12 @@ async function handleUpdateSettings(request, env) {
 
     // 合并所有提交的字段（不限于白名单，支持嵌套对象）
     const newSettings = deepMerge(currentSettings, body);
+    const allowRandom = newSettings.allowRandom || false;
     const updateTime = newSettings.updateTime || Date.now();
 
     // 保存到 KV
     await env.KV.put('site_settings', JSON.stringify(newSettings));
+    await env.KV.put('allowRandom', allowRandom);
     await env.KV.put('updateTime', updateTime.toString());
 
     return jsonResponse({
@@ -742,36 +744,36 @@ async function handleUpdateSettings(request, env) {
     });
   } catch (error) {
     console.error('保存设置到 KV 失败:', error.message);
-    return jsonResponse({ error: '保存设置失败' }, 500);
+    return jsonResponse({ error: 'saveSettingsFailed' }, 500);
   }
 }
 
 async function handleCheckRepositoryStatus(request, env) {
   const authResult = await verifyAuth(request, env);
   if (!authResult) {
-    return jsonResponse({ error: '未授权，请重新登录' }, 401);
+    return jsonResponse({ error: 'notAuthorized' }, 401);
   }
 
   let body;
   try {
     body = await request.json();
   } catch (e) {
-    return jsonResponse({ error: '请求数据无效' }, 400);
+    return jsonResponse({ error: 'invalidData' }, 400);
   }
 
   if (!env.KV) {
-    return jsonResponse({ error: 'KV 未配置' }, 500);
+    return jsonResponse({ error: 'noKV' }, 500);
   }
 
   const { repoId } = body;
   if (!repoId) {
-    return jsonResponse({ error: '缺少仓库 ID' }, 400);
+    return jsonResponse({ error: 'notProvidedRepoId' }, 400);
   }
 
   try {
     const repo = await getRepositoryById(env, repoId);
     if (!repo) {
-      return jsonResponse({ error: '仓库不存在' }, 404);
+      return jsonResponse({ error: 'repoNotFound' }, 404);
     }
 
     const isPublic = repo.isPublic ?? true;
@@ -816,14 +818,14 @@ async function handlePreview(request, env) {
   const filename = pathParts[pathParts.length - 1];
 
   if (!filename || filename.includes('..')) {
-    return jsonResponse({ error: '文件名无效' }, 400);
+    return jsonResponse({ error: 'invalidFilename' }, 400);
   }
 
   // 获取仓库列表
   const repositories = await getRepositories(env);
 
   if (repositories.length === 0) {
-    return jsonResponse({ error: '没有配置仓库' }, 500);
+    return jsonResponse({ error: 'notConfiguredRepo' }, 500);
   }
 
   // 遍历所有仓库查找文件
@@ -869,7 +871,7 @@ async function handlePreview(request, env) {
     }
   }
 
-  return jsonResponse({ error: '文件不存在' }, 404);
+  return jsonResponse({ error: 'fileNotFound' }, 404);
 }
 
 // ========== 工具函数 ==========

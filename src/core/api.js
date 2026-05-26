@@ -1,10 +1,14 @@
 const API_BASE = '/api';
 
-export async function fetchRandom() {
-  const res = await fetch(`${API_BASE}/random`);
+// TODO: 将所有API请求都移到这里
+
+export async function fetchRandom(parameter = '') {
+  const res = await fetch(`${API_BASE}/random${parameter}`, {
+    headers: { Accept: 'application/json' },
+  });
   if (!res.ok) {
     const err = await res.json();
-    throw new Error(err.error || '获取随机图片失败');
+    throw new Error(err.error);
   }
   return await res.json();
 }
@@ -17,7 +21,7 @@ export async function fetchImages(token = '') {
   const res = await fetch(`${API_BASE}/images`, { headers });
   if (!res.ok) {
     const err = await res.json();
-    throw new Error(err.error || '获取图片列表失败');
+    throw new Error(err.error);
   }
   return await res.json();
 }
@@ -33,7 +37,7 @@ export async function deleteImage(filename, repoId, token) {
   });
   if (!res.ok) {
     const err = await res.json();
-    throw new Error(err.error || '删除失败');
+    throw new Error(err.error);
   }
   return await res.json();
 }
@@ -56,7 +60,7 @@ export async function batchSetVisibility(filesList, isPublic, token) {
 
   if (!res.ok) {
     const err = await res.json();
-    throw new Error(err.error || '批量修改失败');
+    throw new Error(err.error);
   }
 
   return await res.json();
@@ -100,6 +104,9 @@ export async function fetchPublicKey() {
   const res = await fetch(`${API_BASE}/auth`, {
     method: 'GET',
   });
-  if (!res.ok) throw new Error('获取公钥失败');
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error);
+  }
   return await res.json();
 }

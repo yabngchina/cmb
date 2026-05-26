@@ -613,8 +613,8 @@
     saveRemoteSettings,
     checkConfiguration,
     fetchRemoteSettings,
-  } from '../utils/settings.js';
-  import { checkRepository } from '../utils/api.js';
+  } from '../core/settings.js';
+  import { checkRepository } from '../core/api.js';
   import { getDefaultSettings } from '../utils/defaults.js';
   import { showLoading, showToast } from './Toast.js';
   import { getLang, setLang, t } from '../utils/i18n.js';
@@ -906,8 +906,8 @@
         try {
           await saveRemoteSettings(props.authToken, settings, currentTime);
           showToast(t('settings.synced'), 'success');
-        } catch (e) {
-          showToast(t('settings.syncFailed', { error: e.message }), 'warning');
+        } catch (err) {
+          showToast(t('settings.syncFailed', { error: t(`api.${err.message}`) }), 'warning');
         }
       } else {
         showToast(t('settings.localOnly'), 'success');
@@ -916,7 +916,7 @@
       emit('saved', settings);
       close();
     } catch (err) {
-      showToast(t('settings.saveError', { error: err.message }), 'error');
+      showToast(t('settings.saveError', { error: t(`api.${err.message}`) }), 'error');
     } finally {
       saving.value = false;
     }
@@ -933,7 +933,7 @@
       showToast(t('settings.syncFromRemote'), 'success');
     } catch (err) {
       closeLoading();
-      showToast(t('settings.syncFromRemoteFailed', { error: err.message }), 'error');
+      showToast(t('settings.syncFromRemoteFailed', { error: t(`api.${err.message}`) }), 'error');
     }
   };
 
@@ -944,7 +944,7 @@
       closeLoading();
     } catch (err) {
       closeLoading();
-      showToast(t('settings.syncToRemoteFailed', { error: err.message }), 'error');
+      showToast(t('settings.syncToRemoteFailed', { error: t(`api.${err.message}`) }), 'error');
     }
   };
 

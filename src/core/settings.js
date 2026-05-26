@@ -2,7 +2,7 @@
  * 远程设置管理
  */
 
-import { DEFAULT_SETTINGS } from './defaults.js';
+import { DEFAULT_SETTINGS } from '../utils/defaults';
 
 const SETTINGS_KEY = 'cf_imgbed_settings';
 const SETTINGS_VERSION = 2;

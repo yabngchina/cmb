@@ -358,7 +358,7 @@
 </template>
 
 <script setup>
-  import { ref, computed, nextTick } from 'vue';
+  import { ref, computed } from 'vue';
   import { UploadQueue, formatFileSize, truncateFileName } from '../utils/uploadQueue.js';
   import { showToast } from './Toast.js';
   import { t } from '../utils/i18n.js';
@@ -641,7 +641,7 @@
       } else if (s > 0 || f > 0) {
         showToast(t('upload.summary', { success: s, fail: f, cancel: c }), f > 0 ? 'warning' : 'success');
       }
-      emit('upload-complete', result);
+      emit('upload-complete');
     }
   };
 

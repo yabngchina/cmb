@@ -710,7 +710,7 @@
 
 <script setup>
   import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
-  import { showToast, showLoading } from './components/Toast.js';
+  import { showToast, showLoading, showLoadingWithUpdate } from './components/Toast.js';
   import {
     fetchImages,
     deleteImage,
@@ -718,15 +718,10 @@
     verifyAuth,
     verifyLogin,
     batchSetVisibility,
-  } from './utils/api.js';
+    fetchRandom,
+  } from './core/api.js';
   import { encryptPassword } from './utils/crypto.js';
-  import {
-    getSettings,
-    getCachedSettings,
-    fetchRemoteSettings,
-    getImageUrl,
-    checkConfiguration,
-  } from './utils/settings.js';
+  import { getSettings, getCachedSettings, getImageUrl, checkConfiguration } from './core/settings.js';
   import UploadManager from './components/UploadManager.vue';
   import ConfirmDialog from './components/ConfirmDialog.vue';
   import SettingsPanel from './components/SettingsPanel.vue';
@@ -736,9 +731,11 @@
   import ImageEditor from './components/ImageEditor.vue';
   import ExportDialog from './components/ExportDialog.vue';
   import { readImageFromClipboard } from './utils/clipboard.js';
-  import { t, setLang, getLang } from './utils/i18n.js';
+  import { t, getLang } from './utils/i18n.js';
   import { applyTheme } from './utils/theme.js';
   import { totpManager } from './utils/totp.js';
+
+  // TODO: 配合API返回的Error类型，展示错误信息
 
   // ==========================================
   // 响应式数据
@@ -872,7 +869,7 @@
         showToast(t('lock.passwordError'), 'error');
       }
     } catch (err) {
-      authError.value = t('lock.authFailed') + ': ' + err.message;
+      authError.value = t('lock.authFailed') + ': ' + t(`api.${err.message}`);
       showToast(t('lock.authFailed'), 'error');
     } finally {
       authLoading.value = false;
@@ -902,7 +899,7 @@
         showToast(t('lock.totpError'), 'error');
       }
     } catch (err) {
-      authError.value = t('lock.authFailed') + ': ' + err.message;
+      authError.value = t('lock.authFailed') + ': ' + t(`api.${err.message}`);
       showToast(t('lock.authFailed'), 'error');
     } finally {
       authLoading.value = false;
@@ -941,6 +938,7 @@
       allowRandom.value = data.allowRandom !== undefined ? data.allowRandom : false;
     } catch (err) {
       console.error('获取公钥失败', err);
+      showToast(t('lock.missingKey'), 'error');
     }
   };
 
@@ -1064,7 +1062,7 @@
       const hasRepoImages = allImages.value.some((img) => (img.repoId || 'default') === repoFilter.value);
 
       if (!hasRepoImages) {
-        const closeLoading = showLoading('加载中...');
+        const closeLoading = showLoading(t('common.loading'));
         (async () => {
           try {
             await loadAllImages();
@@ -1091,26 +1089,18 @@
 
   const loadRandomImage = async () => {
     try {
-      let url = '/api/random';
+      let parameter = '';
       if (randomRepoFilter.value && randomRepoFilter.value !== 'all') {
-        url += `?repoId=${randomRepoFilter.value}`;
+        parameter = `?repoId=${randomRepoFilter.value}`;
       }
 
-      const res = await fetch(url, {
-        headers: { Accept: 'application/json' },
-      });
+      const data = await fetchRandom(parameter);
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || '获取随机图片失败');
-      }
-
-      const data = await res.json();
       if (data && data.name) {
         randomImage.value = { url: getImageUrl(settings.value, data.name, data.repoId) };
       }
     } catch (err) {
-      showToast(t('random.fetchFailed'), 'error');
+      showToast(`${t('random.fetchFailed')}: ${t(`api.${err.message}`)}`, 'error');
     }
   };
 
@@ -1152,7 +1142,7 @@
       imagesLoaded.value = true;
     } catch (err) {
       console.error('加载图片列表失败:', err);
-      showToast(t('gallery.loadFailed'), 'error');
+      showToast(`${t('gallery.loadFailed')}: ${t(`api.${err.message}`)}`, 'error');
       allImages.value = [];
     }
   };
@@ -1352,9 +1342,7 @@
         showToast(`${t('batch.visibilityFailed', { action: actionText })}: ${err.message}`, 'error');
       }
     } catch (err) {
-      if (err !== false) {
-        showToast(t('common.operationCanceled'), 'info');
-      }
+      showToast(t('common.operationCanceled'), 'info');
     }
   };
 
@@ -1371,29 +1359,31 @@
   };
 
   const batchDelete = async () => {
-    const count = selectedImages.value.length;
+    const count = ref(selectedImages.value.length);
     try {
       const confirmed = await showConfirm({
         title: t('delete.batchTitle'),
-        message: t('delete.batchMessage', { count }),
+        message: t('delete.batchMessage', { count: count.value }),
         type: 'danger',
         confirmText: t('delete.confirm'),
         cancelText: t('delete.cancel'),
       });
 
       if (confirmed) {
-        const closeLoading = showLoading(t('delete.deleting'));
-        let deletedCount = 0;
+        const deletedCount = ref(0);
+        const loading = showLoadingWithUpdate(`${t('delete.deleting')} - ${deletedCount.value}/${count.value}`);
+
         for (const image of selectedImages.value) {
           try {
             await deleteImage(image.name, image.repoId, authToken.value);
-            deletedCount++;
+            deletedCount.value++;
+            loading.update(`${t('delete.deleting')} - ${deletedCount.value}/${count.value}`);
           } catch (err) {
             console.error('删除失败:', image.name, err);
           }
         }
-        closeLoading();
-        showToast(t('batch.deleteSuccess', { count: deletedCount }), 'success');
+        showToast(t('batch.deleteSuccess', { count: deletedCount.value }), 'success');
+        loading.close();
 
         const deletedNames = selectedImages.value.map((img) => img.name);
         allImages.value = allImages.value.filter((img) => !deletedNames.includes(img.name));
@@ -1401,9 +1391,7 @@
         loadImages(currentPage.value);
       }
     } catch (err) {
-      if (err !== false) {
-        showToast(t('common.error'), 'error');
-      }
+      showToast(`${t('common.error')}: ${t(`api.${err.message}`)}`, 'error');
     }
   };
 
@@ -1448,9 +1436,7 @@
         }
       }
     } catch (err) {
-      if (err !== false) {
-        showToast(typeof err === 'string' ? err : err.message || t('common.error'), 'error');
-      }
+      showToast(`${t('common.error')}: ${t(`api.${err.message}`)}`, 'error');
     }
   };
 
