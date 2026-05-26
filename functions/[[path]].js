@@ -613,7 +613,7 @@ async function handleGetPublicKey(env) {
   const allowRandom = await getKVSetting(env, 'allowRandom', false);
   return jsonResponse({
     publicKey: env.RSA_PUBLIC_KEY,
-    allowRandom: allowRandom === 'true',
+    allowRandom: allowRandom === true,
   });
 }
 
@@ -731,12 +731,10 @@ async function handleUpdateSettings(request, env) {
 
     // 合并所有提交的字段（不限于白名单，支持嵌套对象）
     const newSettings = deepMerge(currentSettings, body);
-    const allowRandom = newSettings.allowRandom || false;
     const updateTime = newSettings.updateTime || Date.now();
 
     // 保存到 KV
     await env.KV.put('site_settings', JSON.stringify(newSettings));
-    await env.KV.put('allowRandom', allowRandom);
     await env.KV.put('updateTime', updateTime.toString());
 
     return jsonResponse({
